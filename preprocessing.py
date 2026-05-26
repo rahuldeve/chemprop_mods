@@ -1,6 +1,4 @@
 import numpy as np
-import pandas as pd
-import ray
 import rdkit.Chem as Chem
 from rdkit import DataStructs
 from rdkit.Chem import Descriptors, rdFingerprintGenerator
@@ -30,8 +28,6 @@ def mol_to_inchi(mol):
         return Chem.MolToInchi(mol)
 
 
-# ----------- Clustering
-# https://scikit-learn.org/stable/modules/generated/sklearn.model_selection.GroupShuffleSplit.html
 def taylor_butina_clustering(
     fp_list: list[DataStructs.ExplicitBitVect], cutoff: float = 0.65
 ) -> list[int]:
@@ -66,60 +62,11 @@ def get_butina_clusters(mol_list, cutoff: float = 0.65) -> list[int]:
     return taylor_butina_clustering(fp_list, cutoff=cutoff)
 
 
-def get_scaffold(mol) -> str:
-    smi = Chem.MolToSmiles(mol)  # type: ignore
-    scaffold: str = MurckoScaffoldSmiles(smi)  # type: ignore
-    if len(scaffold) == 0:
-        scaffold = smi
-    return scaffold
-
-
-def getMolDescriptors(mol):
-    """calculate the full list of descriptors for a molecule missingVal is used if the descriptor cannot be calculated"""
-    res = {}
-    for nm, fn in Descriptors._descList:
-        # some of the descriptor fucntions can throw errors if they fail, catch those here:
-        with BlockLogs():
-            try:
-                val = fn(mol)
-            except Exception:
-                val = None
-
-        res[nm] = val
-    return res
-
-
-def preprocess_row(row):
-    smi = row["smiles"]
-    mol = standardize(smi)
-
-    if mol is None:
-        return dict(inchi=None, scaffold=None) | {
-            name: None for name, _ in Descriptors.descList
-        }
-
-    return dict(
-        inchi=mol_to_inchi(mol), scaffold=get_scaffold(mol)
-    ) | getMolDescriptors(mol)
-
-
-def preprocess_ray(df):
-    assert "smiles" in set(df.columns)
-
-    df = (
-        ray.data.from_pandas(df, override_num_blocks=len(df) // 64)
-        .map(lambda row: row | preprocess_row(row))
-        # filter any rows that have None. This includes any mols that have NaN descriptor values
-        .filter(lambda row: not any(pd.isna(v) for v in row.values()))
-        .to_pandas()
-    )
-
+def process_dataset(df):
+    df["mol"] = df["smiles"].map(standardize)
+    df["inchi"] = df["mol"].map(mol_to_inchi)
     df = df.groupby(["inchi"]).filter(lambda x: len(x) == 1).reset_index(drop=True)
     df["mol"] = df["inchi"].map(Chem.MolFromInchi)
 
-    clusters, _ = pd.factorize(df["scaffold"])
-    df["scaffold_cluster"] = pd.Series(clusters)
     df["butina_cluster"] = get_butina_clusters(df["mol"])
-
-    df = df.drop(["smiles", "inchi", "scaffold"], axis=1)
     return df
