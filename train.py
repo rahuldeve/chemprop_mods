@@ -125,10 +125,7 @@ def train_and_evaluate(
     splits = generate_repeated_5x5_splits(
         df, split_type, random_state=train_config.random_state
     )
-
-    results = []
+    
     for idx, (train_df, val_df, test_df) in enumerate(splits):
         results_dict = model_train_eval_func(train_df, val_df, test_df, train_config)
-        results.append(dict(idx=idx) | dict(results_dict))
-
-    return results
+        yield dict(idx=idx) | dict(results_dict)
