@@ -10,7 +10,7 @@ def load_data():
     from preprocessing import get_butina_clusters, mol_to_inchi, standardize
 
     df = pd.read_csv("./datasets/ADME_public_set_3521.csv")
-    df = df.loc[:, ["SMILES", "LOG HLM_CLint (mL/min/kg)"]]
+    df = df.loc[:, ["SMILES", "LOG SOLUBILITY PH 6.8 (ug/mL)"]]
     df.columns = ["smiles", "target"]
     df = df.dropna(subset="target").reset_index(drop=True)
 
