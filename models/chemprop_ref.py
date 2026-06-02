@@ -98,12 +98,12 @@ def train_and_evaluate_on_split(
         num_sanity_val_steps=0,
         callbacks=[
             EarlyStopping(
-                monitor="val_loss",
-                mode="min",
+                monitor="val/r2",
+                mode="max",
                 verbose=True,
                 patience=train_config.early_stopping_patience,
             ),
-            ModelCheckpoint(monitor="val_loss", mode="min", save_top_k=1),
+            ModelCheckpoint(monitor="val/r2", mode="max", save_top_k=1),
         ],
     )
 
