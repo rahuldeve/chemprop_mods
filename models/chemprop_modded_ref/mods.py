@@ -20,7 +20,7 @@ class ResidualFFN(torch.nn.Module):
         )
 
     def forward(self, inp, res):
-        return self.norm(self.non_linear(inp) + res)
+        return self.non_linear(self.norm(inp)) + res
 
 
 class ModdedBondMessagePassing(BondMessagePassing):
