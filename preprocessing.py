@@ -18,6 +18,7 @@ def standardize(smiles):
 
         clean_mol = rdMolStandardize.Cleanup(mol)
         parent_clean_mol = rdMolStandardize.FragmentParent(clean_mol)
+        return parent_clean_mol
         uncharger = rdMolStandardize.Uncharger()
         uncharged_parent_clean_mol = uncharger.uncharge(parent_clean_mol)
         return uncharged_parent_clean_mol

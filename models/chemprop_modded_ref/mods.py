@@ -54,15 +54,16 @@ class ModdedBondMessagePassing(BondMessagePassing):
 
         self.layer_ffn = ResidualFFN(d_h)
         # self.layer_ffn = torch.nn.ModuleList([ResidualFFN(d_h) for _ in range(depth)])
+        self.norms = torch.nn.ModuleList([torch.nn.LayerNorm(d_h) for _ in range(depth)])
 
     def update(self, M_t, H_0, H_prev, t):  # type: ignore
         """Calcualte the updated hidden for each edge"""
         H_t = self.W_h(M_t)
-        H_t = self.tau(H_0 + H_t)
+        H_t = self.tau(self.norms[t](H_0 + H_t))
         H_t = self.dropout(H_t)
 
         H_t = self.layer_ffn(H_t, H_prev)
-        # H_t = self.layer_ffn[t](H_t, H_prev)
+        # H_t = self.layer_ffn[t](H_t, H_0)
         return H_t
 
     def forward(self, bmg: BatchMolGraph, V_d: Tensor | None = None) -> Tensor:
