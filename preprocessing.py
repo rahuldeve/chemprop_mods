@@ -17,11 +17,12 @@ def standardize(smiles):
             return None
 
         clean_mol = rdMolStandardize.Cleanup(mol)
-        parent_clean_mol = rdMolStandardize.FragmentParent(clean_mol)
-        return parent_clean_mol
-        uncharger = rdMolStandardize.Uncharger()
-        uncharged_parent_clean_mol = uncharger.uncharge(parent_clean_mol)
-        return uncharged_parent_clean_mol
+        return clean_mol
+        # parent_clean_mol = rdMolStandardize.FragmentParent(clean_mol)
+        # return parent_clean_mol
+        # uncharger = rdMolStandardize.Uncharger()
+        # uncharged_parent_clean_mol = uncharger.uncharge(parent_clean_mol)
+        # return uncharged_parent_clean_mol
 
 
 def mol_to_inchi(mol):

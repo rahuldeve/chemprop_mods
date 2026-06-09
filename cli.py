@@ -15,6 +15,7 @@ def load_data():
     df = df.dropna(subset="target").reset_index(drop=True)
 
     df["mol"] = df["smiles"].map(standardize)
+    df = df.dropna(subset='mol').reset_index(drop=True)
     df["inchi"] = df["mol"].map(mol_to_inchi)
     df["mol"] = df["inchi"].map(Chem.MolFromInchi)
     df["butina_cluster"] = get_butina_clusters(df["mol"])
