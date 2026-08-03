@@ -1,4 +1,5 @@
-from typing import Any, Mapping
+from collections.abc import Mapping
+from typing import Any
 
 import lightning as L
 import numpy as np
@@ -6,9 +7,14 @@ import pandas as pd
 from chemprop.data import MoleculeDatapoint, MoleculeDataset, build_dataloader
 from chemprop.featurizers import SimpleMoleculeMolGraphFeaturizer
 from chemprop.models import MPNN
-from chemprop.nn import MeanAggregation, NormAggregation, RegressionFFN, UnscaleTransform, metrics
+from chemprop.nn import (
+    MeanAggregation,
+    NormAggregation,
+    RegressionFFN,
+    UnscaleTransform,
+    metrics,
+)
 from lightning.pytorch.callbacks.early_stopping import EarlyStopping
-from lightning.pytorch.callbacks.model_checkpoint import ModelCheckpoint
 
 from config import TrainConfig
 from misc import seed_worker, set_seeds
@@ -42,9 +48,9 @@ def prepare_mol_datasets(
     return train_mol_dataset, val_mol_dataset, test_mol_dataset, scaler
 
 
-def build_model(scaler):
-    mp = ModdedBondMessagePassing(depth=5)  # type: ignore
-    agg = NormAggregation()
+def build_model(scaler, train_config: TrainConfig):
+    mp = ModdedBondMessagePassing(depth=5, dropout=train_config.mp_dropout)  # type: ignore
+    agg = MeanAggregation()
     output_transform = UnscaleTransform.from_standard_scaler(scaler)
     ffn = RegressionFFN(n_tasks=1, output_transform=output_transform)  # type: ignore
 
@@ -62,9 +68,9 @@ def train_and_evaluate_on_split(
     val_df: pd.DataFrame,
     test_df: pd.DataFrame,
     train_config: TrainConfig,
-    **kwargs
+    **kwargs,
 ) -> Mapping[str, Any]:
-    
+
     train_mol_ds, val_mol_ds, test_mol_ds, scaler = prepare_mol_datasets(
         train_df, val_df, test_df
     )
@@ -87,11 +93,11 @@ def train_and_evaluate_on_split(
         test_mol_ds, batch_size=train_config.batch_size, num_workers=8, shuffle=False
     )
 
-    model = build_model(scaler)
+    model = build_model(scaler, train_config)
 
     trainer = L.Trainer(
         logger=None,
-        enable_checkpointing=True,
+        enable_checkpointing=False,
         enable_progress_bar=True,
         accelerator="auto",
         devices=1,
@@ -99,15 +105,14 @@ def train_and_evaluate_on_split(
         num_sanity_val_steps=0,
         callbacks=[
             EarlyStopping(
-                monitor="val/r2",
-                mode="max",
+                monitor="val_loss",
+                mode="min",
                 verbose=True,
                 patience=train_config.early_stopping_patience,
             ),
-            ModelCheckpoint(monitor="val/r2", mode="max", save_top_k=1),
         ],
     )
 
     trainer.fit(model, train_dataloaders=train_loader, val_dataloaders=val_loader)
-    results = trainer.test(dataloaders=test_loader, weights_only=False)[0]
+    results = trainer.test(model, dataloaders=test_loader, ckpt_path=None)[0]
     return results
