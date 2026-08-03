@@ -11,6 +11,7 @@ from chemprop.nn import (
     MeanAggregation,
     NormAggregation,
     RegressionFFN,
+    SumAggregation,
     UnscaleTransform,
     metrics,
 )
@@ -49,8 +50,8 @@ def prepare_mol_datasets(
 
 
 def build_model(scaler, train_config: TrainConfig):
-    mp = ModdedBondMessagePassing(depth=5, dropout=train_config.mp_dropout)  # type: ignore
-    agg = MeanAggregation()
+    mp = ModdedBondMessagePassing(depth=8, dropout=train_config.mp_dropout)  # type: ignore
+    agg = SumAggregation()
     output_transform = UnscaleTransform.from_standard_scaler(scaler)
     ffn = RegressionFFN(n_tasks=1, output_transform=output_transform)  # type: ignore
 
