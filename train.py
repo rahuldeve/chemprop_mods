@@ -76,7 +76,7 @@ def generate_repeated_5x5_splits(
                 )
 
             case SplitType.BUTINA:
-                outer_splitter, inner_spliter = get_random_splitters_for_regression(
+                outer_splitter, inner_spliter = get_group_splitters_for_regression(
                     randint, n_outer=5
                 )
                 group_col_getter = lambda _df: _df["butina_cluster"]  # noqa: E731
