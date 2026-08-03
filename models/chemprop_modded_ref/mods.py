@@ -11,16 +11,15 @@ class ResidualFFN(torch.nn.Module):
         super().__init__()
 
         self.norm = torch.nn.LayerNorm(dims)
-        self.non_linear = torch.nn.Sequential(
-            *[
-                torch.nn.Linear(dims, dims),
-                torch.nn.GELU(),
-                torch.nn.Linear(dims, dims),
-            ]
+        self.gate = torch.nn.Linear(dims, 2 * dims)
+        self.up_proj = torch.nn.Sequential(
+            torch.nn.Linear(dims, 2 * dims), torch.nn.GELU()
         )
+        self.down_proj = torch.nn.Linear(2 * dims, dims)
 
     def forward(self, inp, res):
-        return self.non_linear(self.norm(inp)) + res
+        inp_normed = self.norm(inp)
+        return self.down_proj(self.gate(inp_normed) * self.up_proj(inp_normed)) + res
 
 
 class ModdedBondMessagePassing(BondMessagePassing):
@@ -52,9 +51,10 @@ class ModdedBondMessagePassing(BondMessagePassing):
             graph_transform,
         )
 
-        self.layer_ffn = ResidualFFN(d_h)
-        # self.layer_ffn = torch.nn.ModuleList([ResidualFFN(d_h) for _ in range(depth)])
-        self.norms = torch.nn.ModuleList([torch.nn.LayerNorm(d_h) for _ in range(depth)])
+        self.layer_ffn = torch.nn.ModuleList([ResidualFFN(d_h) for _ in range(depth)])
+        self.norms = torch.nn.ModuleList(
+            [torch.nn.LayerNorm(d_h) for _ in range(depth)]
+        )
 
     def update(self, M_t, H_0, H_prev, t):  # type: ignore
         """Calcualte the updated hidden for each edge"""
@@ -62,8 +62,7 @@ class ModdedBondMessagePassing(BondMessagePassing):
         H_t = self.tau(self.norms[t](H_0 + H_t))
         H_t = self.dropout(H_t)
 
-        H_t = self.layer_ffn(H_t, H_prev)
-        # H_t = self.layer_ffn[t](H_t, H_0)
+        H_t = self.layer_ffn[t](H_t, H_0)
         return H_t
 
     def forward(self, bmg: BatchMolGraph, V_d: Tensor | None = None) -> Tensor:
