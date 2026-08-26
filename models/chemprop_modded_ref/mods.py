@@ -1,25 +1,26 @@
 import torch
+import torch.nn.functional as F
 from chemprop.conf import DEFAULT_ATOM_FDIM, DEFAULT_BOND_FDIM, DEFAULT_HIDDEN_DIM
 from chemprop.data import BatchMolGraph
+from chemprop.models import MPNN
 from chemprop.nn import Activation, BondMessagePassing, GraphTransform, ScaleTransform
 from torch import Tensor
 from torch.nn.modules import Module
 
 
 class ResidualFFN(torch.nn.Module):
-    def __init__(self, dims: int) -> None:
+    def __init__(self, dims: int, dropout: float = 0.0, n_layers: int = 1) -> None:
         super().__init__()
 
         self.norm = torch.nn.LayerNorm(dims)
-        self.gate = torch.nn.Linear(dims, 2 * dims)
-        self.up_proj = torch.nn.Sequential(
-            torch.nn.Linear(dims, 2 * dims), torch.nn.GELU()
-        )
-        self.down_proj = torch.nn.Linear(2 * dims, dims)
+        # 4 * dims = a gate and a value branch of 2 * dims each
+        self.gate_up_proj = torch.nn.Linear(dims, 4 * dims, bias=False)
+        self.down_proj = torch.nn.Linear(2 * dims, dims, bias=False)
+        self.dropout = torch.nn.Dropout(dropout)
 
-    def forward(self, inp, res):
-        inp_normed = self.norm(inp)
-        return self.down_proj(self.gate(inp_normed) * self.up_proj(inp_normed)) + res
+    def forward(self, inp: Tensor) -> Tensor:
+        gate, up = self.gate_up_proj(self.norm(inp)).chunk(2, dim=-1)
+        return self.dropout(self.down_proj(F.silu(gate) * up)) + inp
 
 
 class ModdedBondMessagePassing(BondMessagePassing):
@@ -51,18 +52,17 @@ class ModdedBondMessagePassing(BondMessagePassing):
             graph_transform,
         )
 
-        self.layer_ffn = torch.nn.ModuleList([ResidualFFN(d_h) for _ in range(depth)])
-        self.norms = torch.nn.ModuleList(
-            [torch.nn.LayerNorm(d_h) for _ in range(depth)]
+        self.layer_ffn = torch.nn.ModuleList(
+            [ResidualFFN(d_h, n_layers=depth) for _ in range(depth)]
         )
 
     def update(self, M_t, H_0, H_prev, t):  # type: ignore
         """Calcualte the updated hidden for each edge"""
         H_t = self.W_h(M_t)
-        H_t = self.tau(self.norms[t](H_0 + H_t))
+        H_t = self.tau(H_0 + H_t)
         H_t = self.dropout(H_t)
 
-        H_t = self.layer_ffn[t](H_t, H_0)
+        H_t = self.layer_ffn[t](H_t)
         return H_t
 
     def forward(self, bmg: BatchMolGraph, V_d: Tensor | None = None) -> Tensor:
