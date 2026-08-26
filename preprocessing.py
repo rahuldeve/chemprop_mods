@@ -26,8 +26,19 @@ def standardize(smiles):
 
 
 def mol_to_inchi(mol):
+    """InChI for `mol`, or None if RDKit will not produce one.
+
+    Three compounds in the MDR1-MDCK subset and three in the solubility subset
+    survive `standardize` but carry rings RDKit cannot kekulize, and InChI
+    generation raises on those instead of returning an empty string. Returning
+    None lets callers drop them with the same `dropna` that handles SMILES
+    which fail to parse.
+    """
     with BlockLogs():
-        return Chem.MolToInchi(mol)
+        try:
+            return Chem.MolToInchi(mol)
+        except Chem.rdchem.MolSanitizeException:
+            return None
 
 
 def taylor_butina_clustering(
