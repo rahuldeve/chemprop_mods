@@ -10,7 +10,9 @@ class SplitType(StrEnum):
 
 @dataclass
 class TrainConfig:
-    batch_size: int = 64
-    max_epochs: int = 50
+    batch_size: int = 32
+    max_epochs: int = 40
     early_stopping_patience: int = 10
     random_state: int = 42
+    weight_decay: float = 0.01
+    mp_dropout = 0.1
