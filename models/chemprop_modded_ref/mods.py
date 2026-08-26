@@ -4,7 +4,8 @@ from chemprop.conf import DEFAULT_ATOM_FDIM, DEFAULT_BOND_FDIM, DEFAULT_HIDDEN_D
 from chemprop.data import BatchMolGraph
 from chemprop.models import MPNN
 from chemprop.nn import Activation, BondMessagePassing, GraphTransform, ScaleTransform
-from torch import Tensor
+from chemprop.schedulers import build_NoamLike_LRSched
+from torch import Tensor, optim
 from torch.nn.modules import Module
 
 
@@ -82,3 +83,54 @@ class ModdedBondMessagePassing(BondMessagePassing):
             len(bmg.V), H.shape[1], dtype=H.dtype, device=H.device
         ).scatter_reduce_(0, index_torch, H, reduce="sum", include_self=False)
         return self.finalize(M, bmg.V, V_d)
+
+
+class ModdedMPNN(MPNN):
+    """MPNN trained with AdamW instead of chemprop's plain Adam.
+
+    Upstream hardcodes `optim.Adam(self.parameters(), self.init_lr)`, i.e. no
+    weight decay at all. Adam's L2 term is also coupled to the gradient, so on a
+    Noam schedule the effective decay would ride the learning rate up through
+    warmup and back down through cooldown; AdamW decouples it, and the shrink
+    stays a fixed fraction per step.
+
+    Only matrices are decayed. Biases and the LayerNorm/BatchNorm gains are 1-D
+    and are left alone -- pulling a norm's gain toward zero only rescales what
+    the next layer has to undo, and there are too few of those parameters for
+    the regularisation to buy anything.
+    """
+
+    def __init__(self, *args, weight_decay: float = 0.01, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.weight_decay = weight_decay
+        self.hparams["weight_decay"] = weight_decay
+
+    def configure_optimizers(self):
+        decay, no_decay = [], []
+        for p in self.parameters():
+            if p.requires_grad:
+                (decay if p.ndim >= 2 else no_decay).append(p)
+
+        opt = optim.AdamW(
+            [
+                {"params": decay, "weight_decay": self.weight_decay},
+                {"params": no_decay, "weight_decay": 0.0},
+            ],
+            self.init_lr,
+        )
+
+        if self.trainer.train_dataloader is None:
+            # Touch `estimated_stepping_batches` so `num_training_batches` is populated;
+            # see the same workaround in `MPNN.configure_optimizers`.
+            self.trainer.estimated_stepping_batches
+        steps_per_epoch = self.trainer.num_training_batches
+        warmup_steps = self.warmup_epochs * steps_per_epoch
+        cooldown_steps = (self.trainer.max_epochs - self.warmup_epochs) * steps_per_epoch
+
+        lr_sched = build_NoamLike_LRSched(
+            opt, warmup_steps, cooldown_steps, self.init_lr, self.max_lr, self.final_lr
+        )
+        return {
+            "optimizer": opt,
+            "lr_scheduler": {"scheduler": lr_sched, "interval": "step"},
+        }
