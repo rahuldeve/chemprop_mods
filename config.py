@@ -8,6 +8,28 @@ class SplitType(StrEnum):
     BUTINA = auto()
 
 
+class ModelName(StrEnum):
+    CHEMPROP = auto()
+    CHEMPROP_MODDED = auto()
+
+
+class Endpoint(StrEnum):
+    """The six ADME endpoints in `datasets/ADME_public_set_3521.csv`.
+
+    Each value is the exact column header the endpoint is stored under; the
+    member name is what you pass on the command line. Counts of non-null
+    measurements differ wildly between them -- the two protein-binding
+    endpoints have under 200 compounds each, the rest have 2000-3000.
+    """
+
+    HLM_CLINT = "LOG HLM_CLint (mL/min/kg)"
+    RLM_CLINT = "LOG RLM_CLint (mL/min/kg)"
+    MDR1_MDCK_ER = "LOG MDR1-MDCK ER (B-A/A-B)"
+    SOLUBILITY = "LOG SOLUBILITY PH 6.8 (ug/mL)"
+    PPB_HUMAN = "LOG PLASMA PROTEIN BINDING (HUMAN) (% unbound)"
+    PPB_RAT = "LOG PLASMA PROTEIN BINDING (RAT) (% unbound)"
+
+
 @dataclass
 class TrainConfig:
     batch_size: int = 32
@@ -16,3 +38,13 @@ class TrainConfig:
     random_state: int = 42
     weight_decay: float = 0.01
     mp_dropout = 0.1
+
+
+@dataclass
+class EvalConfig:
+    """Settings for the k-fold cross-validation loop itself."""
+
+    n_folds: int = 10
+    butina_cutoff: float = 0.65
+    results_dir: str = "results"
+    use_wandb: bool = False
