@@ -6,7 +6,6 @@ import numpy as np
 import pandas as pd
 from chemprop.data import MoleculeDatapoint, MoleculeDataset, build_dataloader
 from chemprop.featurizers import SimpleMoleculeMolGraphFeaturizer
-from chemprop.models import MPNN
 from chemprop.nn import (
     MeanAggregation,
     NormAggregation,
@@ -19,7 +18,7 @@ from lightning.pytorch.callbacks.early_stopping import EarlyStopping
 
 from config import TrainConfig
 from misc import seed_worker, set_seeds
-from models.chemprop_modded_ref.mods import ModdedBondMessagePassing
+from models.chemprop_modded_ref.mods import ModdedBondMessagePassing, ModdedMPNN
 
 
 def get_molecule_datapoint(row):
@@ -50,17 +49,18 @@ def prepare_mol_datasets(
 
 
 def build_model(scaler, train_config: TrainConfig):
-    mp = ModdedBondMessagePassing(depth=8, dropout=train_config.mp_dropout)  # type: ignore
+    mp = ModdedBondMessagePassing(depth=6, dropout=train_config.mp_dropout)  # type: ignore
     agg = SumAggregation()
     output_transform = UnscaleTransform.from_standard_scaler(scaler)
     ffn = RegressionFFN(n_tasks=1, output_transform=output_transform)  # type: ignore
 
     metric_list = [metrics.MAE(), metrics.RMSE(), metrics.R2Score()]
-    return MPNN(
+    return ModdedMPNN(
         mp,
         agg,
         ffn,
         metrics=metric_list,
+        weight_decay=train_config.weight_decay,
     )
 
 
@@ -104,14 +104,14 @@ def train_and_evaluate_on_split(
         devices=1,
         max_epochs=train_config.max_epochs,
         num_sanity_val_steps=0,
-        # callbacks=[
-        #     EarlyStopping(
-        #         monitor="val_loss",
-        #         mode="min",
-        #         verbose=True,
-        #         patience=train_config.early_stopping_patience,
-        #     ),
-        # ],
+        callbacks=[
+            EarlyStopping(
+                monitor="val_loss",
+                mode="min",
+                verbose=True,
+                patience=train_config.early_stopping_patience,
+            ),
+        ],
     )
 
     trainer.fit(model, train_dataloaders=train_loader, val_dataloaders=val_loader)

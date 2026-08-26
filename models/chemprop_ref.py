@@ -103,14 +103,14 @@ def train_and_evaluate_on_split(
         devices=1,
         max_epochs=train_config.max_epochs,
         num_sanity_val_steps=0,
-        # callbacks=[
-        #     EarlyStopping(
-        #         monitor="val_loss",
-        #         mode="min",
-        #         verbose=True,
-        #         patience=train_config.early_stopping_patience,
-        #     ),
-        # ],
+        callbacks=[
+            EarlyStopping(
+                monitor="val_loss",
+                mode="min",
+                verbose=True,
+                patience=train_config.early_stopping_patience,
+            ),
+        ],
     )
 
     trainer.fit(model, train_dataloaders=train_loader, val_dataloaders=val_loader)
