@@ -9,3 +9,4 @@ wheels/
 # Virtual environments
 .venv
 lightning_logs/
+results/
