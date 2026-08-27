@@ -49,8 +49,12 @@ def prepare_mol_datasets(
 
 
 def build_model(scaler, train_config: TrainConfig):
-    mp = ModdedBondMessagePassing(depth=6, dropout=train_config.mp_dropout)  # type: ignore
-    agg = SumAggregation()
+    mp = ModdedBondMessagePassing(  # type: ignore
+        depth=train_config.mp_depth,
+        dropout=train_config.mp_dropout,
+        zero_init=train_config.ffn_zero_init,
+    )
+    agg = NormAggregation()
     output_transform = UnscaleTransform.from_standard_scaler(scaler)
     ffn = RegressionFFN(n_tasks=1, output_transform=output_transform)  # type: ignore
 

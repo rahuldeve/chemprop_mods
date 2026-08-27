@@ -10,14 +10,26 @@ from torch.nn.modules import Module
 
 
 class ResidualFFN(torch.nn.Module):
-    def __init__(self, dims: int, dropout: float = 0.0, n_layers: int = 1) -> None:
+    def __init__(
+        self, dims: int, dropout: float = 0.0, zero_init: bool = True
+    ) -> None:
         super().__init__()
 
         self.norm = torch.nn.LayerNorm(dims)
-        # 4 * dims = a gate and a value branch of 2 * dims each
-        self.gate_up_proj = torch.nn.Linear(dims, 4 * dims, bias=False)
-        self.down_proj = torch.nn.Linear(2 * dims, dims, bias=False)
+        self.gate_up_proj = torch.nn.Linear(dims, 2 * dims, bias=False)
+        self.down_proj = torch.nn.Linear(dims, dims, bias=False)
         self.dropout = torch.nn.Dropout(dropout)
+
+        # Zero the output projection so the block starts as an exact identity:
+        # `forward` returns `0 + inp` on the first step, which makes the network
+        # numerically equal to stock chemprop at init. The block only moves away
+        # from identity if the gradient says it earns its place, instead of
+        # perturbing a message-passing recurrence that already works.
+        #
+        # `zero_init=False` restores the ordinary random init, which is the
+        # control for whether the identity start is what the block needed.
+        if zero_init:
+            torch.nn.init.zeros_(self.down_proj.weight)
 
     def forward(self, inp: Tensor) -> Tensor:
         gate, up = self.gate_up_proj(self.norm(inp)).chunk(2, dim=-1)
@@ -38,6 +50,7 @@ class ModdedBondMessagePassing(BondMessagePassing):
         d_vd: int | None = None,
         V_d_transform: ScaleTransform | None = None,
         graph_transform: GraphTransform | None = None,
+        zero_init: bool = True,
     ):
         super().__init__(
             d_v,
@@ -53,9 +66,7 @@ class ModdedBondMessagePassing(BondMessagePassing):
             graph_transform,
         )
 
-        self.layer_ffn = torch.nn.ModuleList(
-            [ResidualFFN(d_h, n_layers=depth) for _ in range(depth)]
-        )
+        self.layer_ffn = ResidualFFN(d_h, dropout=dropout, zero_init=zero_init)
 
     def update(self, M_t, H_0, H_prev, t):  # type: ignore
         """Calcualte the updated hidden for each edge"""
@@ -63,7 +74,7 @@ class ModdedBondMessagePassing(BondMessagePassing):
         H_t = self.tau(H_0 + H_t)
         H_t = self.dropout(H_t)
 
-        H_t = self.layer_ffn[t](H_t)
+        H_t = self.layer_ffn(H_t)
         return H_t
 
     def forward(self, bmg: BatchMolGraph, V_d: Tensor | None = None) -> Tensor:

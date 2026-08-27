@@ -12,15 +12,26 @@ def load_data(endpoint: Endpoint, butina_cutoff: float = 0.65):
     so clustering the full file once would leave most endpoints with groups
     that are mostly empty.
     """
+    import numpy as np
     import pandas as pd
     import rdkit.Chem as Chem
 
     from preprocessing import get_butina_clusters, mol_to_inchi, standardize
 
-    df = pd.read_csv("./datasets/ADME_public_set_3521.csv")
-    df = df.loc[:, ["SMILES", endpoint.value]]
-    df.columns = ["smiles", "target"]
-    df = df.dropna(subset="target").reset_index(drop=True)
+    if endpoint is Endpoint.PK_AUC:
+        # Separate export with its own conventions: SMILES live in `mol`, and
+        # AUC is raw where every ADME column is already logged. It spans five
+        # orders of magnitude (0 to 110845) with nine true zeros, so the +1
+        # offset is what keeps the log defined -- skew 3.7 -> -0.4.
+        df = pd.read_csv("./datasets/PK.csv").loc[:, ["mol", "AUC"]]
+        df.columns = ["smiles", "target"]
+        df = df.dropna(subset=["smiles", "target"]).reset_index(drop=True)
+        df["target"] = np.log10(df["target"] + 1)
+    else:
+        df = pd.read_csv("./datasets/ADME_public_set_3521.csv")
+        df = df.loc[:, ["SMILES", endpoint.value]]
+        df.columns = ["smiles", "target"]
+        df = df.dropna(subset="target").reset_index(drop=True)
 
     df["mol"] = df["smiles"].map(standardize)
     df = df.dropna(subset="mol").reset_index(drop=True)
