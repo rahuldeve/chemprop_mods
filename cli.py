@@ -76,7 +76,7 @@ def evaluate(
     train_config: TrainConfig,
     eval_config: EvalConfig,
 ) -> None:
-    """Cross-validate one model on one ADME endpoint over Butina-grouped folds."""
+    """Cross-validate one model on one ADME endpoint over `--eval-config.split-type` folds."""
     # `endpoint` and `model` are deliberately required. A score is meaningless
     # without both, and a default would let a run be mislabelled in the results
     # dir or in wandb without anyone noticing. The two config groups carry no
@@ -117,7 +117,7 @@ def evaluate(
 
     results_df = pd.DataFrame(rows)
     stats = summarize(results_df)
-    print(format_summary(endpoint, str(model), stats))
+    print(format_summary(endpoint, str(model), eval_config.split_type, stats))
 
     run_dir = save_results(
         results_df, stats, endpoint, str(model), eval_config, train_config

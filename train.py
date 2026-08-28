@@ -129,8 +129,8 @@ def train_and_evaluate(
     )
     
     for idx, (train_df, val_df, test_df) in enumerate(splits):
-        print(val_df['target'].mean(), val_df['target'].std(), val_df['target'].min(), val_df['target'].max())
-        print(test_df['target'].mean(), test_df['target'].std(), test_df['target'].min(), test_df['target'].max())
+        # print(val_df['target'].mean(), val_df['target'].std(), val_df['target'].min(), val_df['target'].max())
+        # print(test_df['target'].mean(), test_df['target'].std(), test_df['target'].min(), test_df['target'].max())
         results_dict = model_train_eval_func(train_df, val_df, test_df, train_config)
-        yield dict(idx=idx) | dict(results_dict)
+        yield {"idx": idx} | dict(results_dict)
         break

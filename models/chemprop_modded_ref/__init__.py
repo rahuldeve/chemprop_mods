@@ -85,17 +85,17 @@ def train_and_evaluate_on_split(
     train_loader = build_dataloader(
         train_mol_ds,
         batch_size=train_config.batch_size,
-        num_workers=8,
+        num_workers=4,
         seed=train_config.random_state,
         worker_init_fn=seed_worker,
     )
 
     val_loader = build_dataloader(
-        val_mol_ds, batch_size=train_config.batch_size, num_workers=8, shuffle=False
+        val_mol_ds, batch_size=train_config.batch_size, num_workers=4, shuffle=False
     )
 
     test_loader = build_dataloader(
-        test_mol_ds, batch_size=train_config.batch_size, num_workers=8, shuffle=False
+        test_mol_ds, batch_size=train_config.batch_size, num_workers=4, shuffle=False
     )
 
     model = build_model(scaler, train_config)

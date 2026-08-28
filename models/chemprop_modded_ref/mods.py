@@ -15,7 +15,8 @@ class ResidualFFN(torch.nn.Module):
     ) -> None:
         super().__init__()
 
-        self.norm = torch.nn.LayerNorm(dims)
+        self.in_norm = torch.nn.LayerNorm(dims)
+        self.out_norm = torch.nn.LayerNorm(dims)
         self.gate_up_proj = torch.nn.Linear(dims, 2 * dims, bias=False)
         self.down_proj = torch.nn.Linear(dims, dims, bias=False)
         self.dropout = torch.nn.Dropout(dropout)
@@ -28,12 +29,12 @@ class ResidualFFN(torch.nn.Module):
         #
         # `zero_init=False` restores the ordinary random init, which is the
         # control for whether the identity start is what the block needed.
-        if zero_init:
-            torch.nn.init.zeros_(self.down_proj.weight)
+        # if zero_init:
+        #     torch.nn.init.zeros_(self.down_proj.weight)
 
     def forward(self, inp: Tensor) -> Tensor:
-        gate, up = self.gate_up_proj(self.norm(inp)).chunk(2, dim=-1)
-        return self.dropout(self.down_proj(F.silu(gate) * up)) + inp
+        gate, up = self.gate_up_proj(self.in_norm(inp)).chunk(2, dim=-1)
+        return self.out_norm(self.dropout(self.down_proj(F.silu(gate) * up)) + inp)
 
 
 class ModdedBondMessagePassing(BondMessagePassing):
@@ -70,11 +71,11 @@ class ModdedBondMessagePassing(BondMessagePassing):
 
     def update(self, M_t, H_0, H_prev, t):  # type: ignore
         """Calcualte the updated hidden for each edge"""
-        H_t = self.W_h(M_t)
-        H_t = self.tau(H_0 + H_t)
+        H_t = self.layer_ffn(M_t)
+        H_t = self.tau(H_t + H_0)
         H_t = self.dropout(H_t)
 
-        H_t = self.layer_ffn(H_t)
+        # H_t = self.layer_ffn(H_t)
         return H_t
 
     def forward(self, bmg: BatchMolGraph, V_d: Tensor | None = None) -> Tensor:
