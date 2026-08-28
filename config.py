@@ -40,11 +40,11 @@ class Endpoint(StrEnum):
 @dataclass
 class TrainConfig:
     batch_size: int = 64
-    max_epochs: int = 30
+    max_epochs: int = 40
     early_stopping_patience: int = 10
     random_state: int = 42
-    weight_decay: float = 1e-4
-    mp_depth: int = 3
+    weight_decay: float = 0
+    mp_depth: int = 6
     ffn_zero_init: bool = True
     # Give each message passing step its own ResidualFFN instead of reusing one
     # block at every step. Costs (depth - 1) x ~270K parameters.

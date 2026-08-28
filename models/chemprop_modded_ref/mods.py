@@ -73,7 +73,7 @@ class ModdedBondMessagePassing(BondMessagePassing):
         """Calcualte the updated hidden for each edge"""
         H_t = self.layer_ffn(M_t)
         H_t = self.tau(H_t + H_0)
-        H_t = self.dropout(H_t)
+        H_t = self.dropout(H_t) + H_prev
 
         # H_t = self.layer_ffn(H_t)
         return H_t
