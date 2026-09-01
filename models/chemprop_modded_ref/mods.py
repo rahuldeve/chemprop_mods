@@ -11,30 +11,17 @@ from torch.nn.modules import Module
 
 class ResidualFFN(torch.nn.Module):
     def __init__(
-        self, dims: int, dropout: float = 0.0, zero_init: bool = True
+        self, dims: int, dropout: float = 0.0, use_norms: bool = True
     ) -> None:
         super().__init__()
 
-        self.in_norm = torch.nn.LayerNorm(dims)
-        self.out_norm = torch.nn.LayerNorm(dims)
-        self.gate_up_proj = torch.nn.Linear(dims, 2 * dims, bias=False)
-        self.down_proj = torch.nn.Linear(dims, dims, bias=False)
+        self.gate_up_proj = torch.nn.Linear(dims, 2 * dims, bias=True)
+        self.down_proj = torch.nn.Linear(dims, dims, bias=True)
         self.dropout = torch.nn.Dropout(dropout)
 
-        # Zero the output projection so the block starts as an exact identity:
-        # `forward` returns `0 + inp` on the first step, which makes the network
-        # numerically equal to stock chemprop at init. The block only moves away
-        # from identity if the gradient says it earns its place, instead of
-        # perturbing a message-passing recurrence that already works.
-        #
-        # `zero_init=False` restores the ordinary random init, which is the
-        # control for whether the identity start is what the block needed.
-        # if zero_init:
-        #     torch.nn.init.zeros_(self.down_proj.weight)
-
     def forward(self, inp: Tensor) -> Tensor:
-        gate, up = self.gate_up_proj(self.in_norm(inp)).chunk(2, dim=-1)
-        return self.out_norm(self.dropout(self.down_proj(F.silu(gate) * up)) + inp)
+        gate, up = self.gate_up_proj(inp).chunk(2, dim=-1)
+        return self.dropout(self.down_proj(F.silu(gate) * up))
 
 
 class ModdedBondMessagePassing(BondMessagePassing):
@@ -67,15 +54,14 @@ class ModdedBondMessagePassing(BondMessagePassing):
             graph_transform,
         )
 
-        self.layer_ffn = ResidualFFN(d_h, dropout=dropout, zero_init=zero_init)
+        self.layer_ffn = ResidualFFN(d_h, dropout=0.0, use_norms=False)
+
 
     def update(self, M_t, H_0, H_prev, t):  # type: ignore
         """Calcualte the updated hidden for each edge"""
         H_t = self.layer_ffn(M_t)
         H_t = self.tau(H_t + H_0)
-        H_t = self.dropout(H_t) + H_prev
-
-        # H_t = self.layer_ffn(H_t)
+        H_t = self.dropout(H_t)
         return H_t
 
     def forward(self, bmg: BatchMolGraph, V_d: Tensor | None = None) -> Tensor:

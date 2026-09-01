@@ -26,8 +26,13 @@ def get_molecule_datapoint(row):
 
 
 def prepare_mol_datasets(
-    train_df: pd.DataFrame, val_df: pd.DataFrame, test_df: pd.DataFrame
+    train_df: pd.DataFrame,
+    val_df: pd.DataFrame,
+    test_df: pd.DataFrame,
+    train_config: TrainConfig,
 ):
+    # RWSE is deliberately absent here. `rwse_k` applies to the fork only, so
+    # this arm stays the unmodified reference the fork is measured against.
     train_df["mol_dp"] = train_df.apply(get_molecule_datapoint, axis=1)
     val_df["mol_dp"] = val_df.apply(get_molecule_datapoint, axis=1)
     test_df["mol_dp"] = test_df.apply(get_molecule_datapoint, axis=1)
@@ -49,7 +54,13 @@ def prepare_mol_datasets(
 
 
 def build_model(scaler, train_config: TrainConfig):
-    mp = BondMessagePassing(dropout=train_config.mp_dropout)  # type: ignore
+    mp = BondMessagePassing(  # type: ignore
+        # `depth` was previously omitted, which silently pinned this arm to
+        # chemprop's default of 3 no matter what `mp_depth` said. Unrelated to
+        # RWSE; the default is still 3, so earlier runs reproduce unchanged.
+        depth=train_config.mp_depth,
+        dropout=train_config.mp_dropout,
+    )
     agg = NormAggregation()
     output_transform = UnscaleTransform.from_standard_scaler(scaler)
     ffn = RegressionFFN(n_tasks=1, output_transform=output_transform)  # type: ignore
@@ -72,7 +83,7 @@ def train_and_evaluate_on_split(
 ) -> Mapping[str, Any]:
 
     train_mol_ds, val_mol_ds, test_mol_ds, scaler = prepare_mol_datasets(
-        train_df, val_df, test_df
+        train_df, val_df, test_df, train_config
     )
 
     set_seeds(train_config.random_state)
@@ -96,7 +107,7 @@ def train_and_evaluate_on_split(
     model = build_model(scaler, train_config)
 
     trainer = L.Trainer(
-        logger=None,
+        logger=False,
         enable_checkpointing=False,
         enable_progress_bar=True,
         accelerator="auto",

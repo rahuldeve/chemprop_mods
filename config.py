@@ -40,11 +40,11 @@ class Endpoint(StrEnum):
 @dataclass
 class TrainConfig:
     batch_size: int = 64
-    max_epochs: int = 40
+    max_epochs: int = 60
     early_stopping_patience: int = 10
     random_state: int = 42
     weight_decay: float = 0
-    mp_depth: int = 6
+    mp_depth: int = 4
     ffn_zero_init: bool = True
     # Give each message passing step its own ResidualFFN instead of reusing one
     # block at every step. Costs (depth - 1) x ~270K parameters.
@@ -55,7 +55,7 @@ class TrainConfig:
     w_h_per_level: bool = False
     # Number of random walk lengths encoded per atom. 0 disables RWSE entirely
     # and reproduces the plain featurizer exactly.
-    rwse_k: int = 0
+    rwse_k: int = 16
     # Where the encoding enters. "input" sizes the message passing matrices to
     # see it, so it conditions the chemistry; "readout" keeps message passing
     # purely chemical and adds it to the finalized atom representations, which
