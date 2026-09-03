@@ -85,6 +85,13 @@ def evaluate(
     import pandas as pd
 
     from evaluate import cross_validate, format_summary, save_results, summarize
+    from misc import enable_determinism
+
+    # Called before the first CUDA op on purpose: `CUBLAS_WORKSPACE_CONFIG` is
+    # read when the CUDA context is created. Without it, repeat runs of
+    # identical code differ by more than the effects this protocol measures --
+    # so a fold-level win could be training noise rather than the model.
+    enable_determinism()
 
     df = load_data(endpoint, butina_cutoff=eval_config.butina_cutoff)
     print(
