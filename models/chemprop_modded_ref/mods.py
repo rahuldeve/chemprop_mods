@@ -24,6 +24,22 @@ class ResidualFFN(torch.nn.Module):
         return self.dropout(self.down_proj(F.silu(gate) * up))
 
 
+class GatedFFN(torch.nn.Module):
+    def __init__(
+        self, dims: int, dropout: float = 0.0, use_norms: bool = True
+    ) -> None:
+        super().__init__()
+
+        self.gate_proj = torch.nn.Linear(dims, dims, bias=True)
+        self.inp_proj = torch.nn.Linear(dims, dims, bias=True)
+        # self.dropout = torch.nn.Dropout(dropout)
+
+    def forward(self, inp: Tensor, gate: Tensor) -> Tensor:
+        gate = F.silu(self.gate_proj(gate))
+        inp = self.inp_proj(inp)
+        return gate * inp
+
+
 class ModdedBondMessagePassing(BondMessagePassing):
     def __init__(
         self,
@@ -54,14 +70,17 @@ class ModdedBondMessagePassing(BondMessagePassing):
             graph_transform,
         )
 
-        self.layer_ffn = ResidualFFN(d_h, dropout=0.0, use_norms=False)
+        self.l1 = GatedFFN(d_h, dropout=0.0, use_norms=False)
+        # self.l2 = GatedFFN(d_h, dropout=0.0, use_norms=False)
 
 
     def update(self, M_t, H_0, H_prev, t):  # type: ignore
         """Calcualte the updated hidden for each edge"""
-        H_t = self.layer_ffn(M_t)
+        H_t = self.W_h(M_t)
         H_t = self.tau(H_t + H_0)
         H_t = self.dropout(H_t)
+        
+        H_t = H_t + self.l1(H_t, H_prev)
         return H_t
 
     def forward(self, bmg: BatchMolGraph, V_d: Tensor | None = None) -> Tensor:
