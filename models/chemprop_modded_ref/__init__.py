@@ -25,10 +25,11 @@ from models.rwse import compute_rwse, rwse_dims
 
 def get_molecule_datapoint(row, train_config: TrainConfig):
     y = np.array([row["target"]])
-    rwse = compute_rwse(row["mol"], train_config.rwse_k)
+    rwse = compute_rwse(row["mol"], train_config.effective_rwse_k)
     if rwse is None:
-        # Identical to the pre-RWSE call, so `rwse_k = 0` reproduces every
-        # earlier run rather than passing a zero-width array through.
+        # Identical to the pre-RWSE call, so switching the encoding off
+        # reproduces every earlier run rather than passing a zero-width array
+        # through.
         return MoleculeDatapoint(mol=row["mol"], y=y)
     if train_config.rwse_at == "input":
         return MoleculeDatapoint(mol=row["mol"], y=y, V_f=rwse)
@@ -41,7 +42,7 @@ def prepare_mol_datasets(
     test_df: pd.DataFrame,
     train_config: TrainConfig,
 ):
-    d_vf, _ = rwse_dims(train_config.rwse_k, train_config.rwse_at)
+    d_vf, _ = rwse_dims(train_config.effective_rwse_k, train_config.rwse_at)
 
     def to_dp(row):
         return get_molecule_datapoint(row, train_config)
@@ -67,7 +68,7 @@ def prepare_mol_datasets(
 
 
 def build_model(scaler, train_config: TrainConfig):
-    d_vf, d_vd = rwse_dims(train_config.rwse_k, train_config.rwse_at)
+    d_vf, d_vd = rwse_dims(train_config.effective_rwse_k, train_config.rwse_at)
     mp = ModdedBondMessagePassing(  # type: ignore
         d_v=DEFAULT_ATOM_FDIM + d_vf,
         d_vd=d_vd or None,
@@ -79,8 +80,8 @@ def build_model(scaler, train_config: TrainConfig):
     output_transform = UnscaleTransform.from_standard_scaler(scaler)
     # Sized from the encoder rather than left at the default 300: chemprop's
     # `W_d` is `Linear(d_h + d_vd, d_h + d_vd)`, so a readout-mode RWSE widens
-    # the encoder output to `d_h + rwse_k`. At `rwse_k = 0` this is still 300,
-    # so earlier runs reproduce.
+    # the encoder output to `d_h + rwse_k`. With the encoding off this is still
+    # 300, so earlier runs reproduce.
     ffn = RegressionFFN(  # type: ignore
         n_tasks=1, input_dim=mp.output_dim, output_transform=output_transform
     )

@@ -31,8 +31,9 @@ def prepare_mol_datasets(
     test_df: pd.DataFrame,
     train_config: TrainConfig,
 ):
-    # RWSE is deliberately absent here. `rwse_k` applies to the fork only, so
-    # this arm stays the unmodified reference the fork is measured against.
+    # RWSE is deliberately absent here. `use_rwse` and `rwse_k` apply to the
+    # fork only, so this arm stays the unmodified reference it is measured
+    # against.
     train_df["mol_dp"] = train_df.apply(get_molecule_datapoint, axis=1)
     val_df["mol_dp"] = val_df.apply(get_molecule_datapoint, axis=1)
     test_df["mol_dp"] = test_df.apply(get_molecule_datapoint, axis=1)

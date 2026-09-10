@@ -53,8 +53,14 @@ class TrainConfig:
     # Costs (depth - 1) x 90K parameters; sharing is what makes chemprop's
     # `mp_depth` free.
     w_h_per_level: bool = False
-    # Number of random walk lengths encoded per atom. 0 disables RWSE entirely
-    # and reproduces the plain featurizer exactly.
+    # Whether the fork injects RWSE at all. Off reproduces the plain featurizer
+    # and the pre-RWSE layer sizes exactly, so it is the ablation arm for every
+    # `rwse_*` setting below -- those keep their values while it is off, which is
+    # what lets a sweep flip the encoding on and off without restating them.
+    # Ignored by stock chemprop, which never injects RWSE.
+    use_rwse: bool = True
+    # Number of random walk lengths encoded per atom. 0 also disables RWSE, so
+    # earlier runs that switched it off that way reproduce unchanged.
     rwse_k: int = 16
     # Where the encoding enters. "input" sizes the message passing matrices to
     # see it, so it conditions the chemistry; "readout" keeps message passing
@@ -74,6 +80,17 @@ class TrainConfig:
     # so setting this near the mean atom count isolates the first effect.
     agg_norm: float = 100.0
     mp_dropout = 0.1
+
+    @property
+    def effective_rwse_k(self) -> int:
+        """`rwse_k` as the model should read it, with `use_rwse` applied.
+
+        Gated in one place rather than at each use because the two consumers --
+        the datapoint builder and the encoder sizing -- have to agree on whether
+        the encoding is present. A disagreement would not be caught by either;
+        it would surface as a shape mismatch inside message passing.
+        """
+        return self.rwse_k if self.use_rwse else 0
 
 
 @dataclass
