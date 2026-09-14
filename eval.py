@@ -43,13 +43,13 @@ def evaluate(df, cp_config, cpm_config=None):
     for fold, (train_df, val_df, test_df) in enumerate(splits):
         cp_results_dict = cp_ref.train_and_evaluate_on_split(train_df, val_df, test_df, cp_config)
         cp_results_dict['model'] = 'baseline' # type: ignore
+        cp_results_dict['fold'] = fold # type: ignore
+        results.append(cp_results_dict)
 
         cpm_results_dict = cpm_ref.train_and_evaluate_on_split(train_df, val_df, test_df, cpm_config)
         cpm_results_dict['model'] = 'modded' # type: ignore
-
-        result_dict = {**cp_results_dict, **cpm_results_dict}
-        result_dict['fold'] = fold
-        results.append(result_dict)
+        cpm_results_dict['fold'] = fold # type: ignore
+        results.append(cpm_results_dict)
 
     return pd.DataFrame.from_records(results)
 
