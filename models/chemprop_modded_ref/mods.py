@@ -30,8 +30,8 @@ class GatedFFN(torch.nn.Module):
     ) -> None:
         super().__init__()
 
-        self.gate_proj = torch.nn.Linear(dims, dims, bias=True)
-        self.inp_proj = torch.nn.Linear(dims, dims, bias=True)
+        self.gate_proj = torch.nn.Linear(dims, dims, bias=False)
+        self.inp_proj = torch.nn.Linear(dims, dims, bias=False)
         # self.dropout = torch.nn.Dropout(dropout)
 
     def forward(self, inp: Tensor, gate: Tensor) -> Tensor:
@@ -71,12 +71,13 @@ class ModdedBondMessagePassing(BondMessagePassing):
         )
 
         self.l1 = GatedFFN(d_h, dropout=0.0, use_norms=False)
+        self.alpha = torch.nn.Parameter(torch.tensor(0.1))
         # self.l2 = GatedFFN(d_h, dropout=0.0, use_norms=False)
 
 
     def update(self, M_t, H_0, H_prev, t):  # type: ignore
         """Calcualte the updated hidden for each edge"""
-        H_t = self.W_h(M_t)
+        H_t = self.l1(self.alpha * H_prev + M_t, H_prev)
         H_t = self.tau(H_t + H_0)
         H_t = self.dropout(H_t)
         
