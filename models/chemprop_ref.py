@@ -110,7 +110,7 @@ def train_and_evaluate_on_split(
     trainer = L.Trainer(
         logger=False,
         enable_checkpointing=False,
-        enable_progress_bar=True,
+        enable_progress_bar=False,
         accelerator="auto",
         devices=1,
         max_epochs=train_config.max_epochs,
