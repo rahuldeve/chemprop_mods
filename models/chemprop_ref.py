@@ -4,6 +4,7 @@ from typing import Any
 import lightning as L
 import numpy as np
 import pandas as pd
+import torch
 from chemprop.data import MoleculeDatapoint, MoleculeDataset, build_dataloader
 from chemprop.featurizers import SimpleMoleculeMolGraphFeaturizer
 from chemprop.models import MPNN
@@ -55,16 +56,11 @@ def prepare_mol_datasets(
 
 
 def build_model(scaler, train_config: TrainConfig):
-    mp = BondMessagePassing(  # type: ignore
-        # `depth` was previously omitted, which silently pinned this arm to
-        # chemprop's default of 3 no matter what `mp_depth` said. Unrelated to
-        # RWSE; the default is still 3, so earlier runs reproduce unchanged.
-        depth=train_config.mp_depth,
-        dropout=train_config.mp_dropout,
-    )
+    chameleon_weights = torch.load("./chemeleon_mp.pt", weights_only=True)
+    mp = BondMessagePassing(**chameleon_weights['hyper_parameters']) # type: ignore
     agg = NormAggregation()
     output_transform = UnscaleTransform.from_standard_scaler(scaler)
-    ffn = RegressionFFN(n_tasks=1, output_transform=output_transform)  # type: ignore
+    ffn = RegressionFFN(input_dim=mp.output_dim, n_tasks=1, output_transform=output_transform)  # type: ignore
 
     metric_list = [metrics.MAE(), metrics.RMSE(), metrics.R2Score()]
     return MPNN(
@@ -110,7 +106,7 @@ def train_and_evaluate_on_split(
     trainer = L.Trainer(
         logger=False,
         enable_checkpointing=False,
-        enable_progress_bar=False,
+        enable_progress_bar=True,
         accelerator="auto",
         devices=1,
         max_epochs=train_config.max_epochs,

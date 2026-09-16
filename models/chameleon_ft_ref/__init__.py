@@ -19,7 +19,7 @@ from lightning.pytorch.callbacks.early_stopping import EarlyStopping
 
 from config import TrainConfig
 from misc import seed_worker, set_seeds
-from models.chemprop_modded_ref.mods import ModdedBondMessagePassing, ModdedMPNN
+from models.chameleon_ft_ref.mods import ModdedBondMessagePassing, ModdedMPNN
 from models.rwse import compute_rwse, rwse_dims
 
 
