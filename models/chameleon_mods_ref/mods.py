@@ -15,8 +15,8 @@ class ResidualFFN(torch.nn.Module):
     ) -> None:
         super().__init__()
 
-        self.gate_up_proj = torch.nn.Linear(dims, 2 * dims, bias=True)
-        self.down_proj = torch.nn.Linear(dims, dims, bias=True)
+        self.gate_up_proj = torch.nn.Linear(dims, 2 * dims, bias=False)
+        self.down_proj = torch.nn.Linear(dims, dims, bias=False)
         self.dropout = torch.nn.Dropout(dropout)
 
     def forward(self, inp: Tensor) -> Tensor:
@@ -26,12 +26,12 @@ class ResidualFFN(torch.nn.Module):
 
 class GatedFFN(torch.nn.Module):
     def __init__(
-        self, dims: int, dropout: float = 0.0, use_norms: bool = True
+        self, dims: int, dropout: float = 0.0, bias: bool = True
     ) -> None:
         super().__init__()
 
-        self.gate_proj = torch.nn.Linear(dims, dims, bias=False)
-        self.inp_proj = torch.nn.Linear(dims, dims, bias=False)
+        self.gate_proj = torch.nn.Linear(dims, dims, bias=bias)
+        self.inp_proj = torch.nn.Linear(dims, dims, bias=bias)
         # self.dropout = torch.nn.Dropout(dropout)
 
     def forward(self, inp: Tensor, gate: Tensor) -> Tensor:
@@ -70,14 +70,15 @@ class ModdedBondMessagePassing(BondMessagePassing):
             graph_transform,
         )
 
-        self.l1 = GatedFFN(d_h, dropout=0.0, use_norms=False)
-        self.alpha = torch.nn.Parameter(torch.tensor(0.1))
-        # self.l2 = GatedFFN(d_h, dropout=0.0, use_norms=False)
+        # self.l1 = ResidualFFN(d_h, dropout=0.0)
+        # self.alpha = torch.nn.Parameter(torch.tensor(0.1))
+
+        self.l1 = GatedFFN(d_h, dropout=0.0, bias=False)
 
 
     def update(self, M_t, H_0, H_prev, t):  # type: ignore
         """Calcualte the updated hidden for each edge"""
-        H_t = self.l1(self.alpha * H_prev + M_t, H_prev)
+        H_t = self.W_h(M_t + self.l1(H_prev, M_t))
         H_t = self.tau(H_t + H_0)
         H_t = self.dropout(H_t)
         

@@ -20,7 +20,7 @@ from lightning.pytorch.callbacks.early_stopping import EarlyStopping
 
 from config import TrainConfig
 from misc import seed_worker, set_seeds
-from models.chameleon_ft_ref.mods import ModdedBondMessagePassing, ModdedMPNN
+from models.chameleon_mods_ref.mods import ModdedBondMessagePassing, ModdedMPNN
 from models.rwse import compute_rwse, rwse_dims
 
 
@@ -72,6 +72,7 @@ def build_model(scaler, train_config: TrainConfig):
     d_vf, d_vd = rwse_dims(train_config.effective_rwse_k, train_config.rwse_at)
     mp = ModdedBondMessagePassing(  # type: ignore
         d_v=DEFAULT_ATOM_FDIM + d_vf,
+        d_h=200,
         d_vd=d_vd or None,
         depth=train_config.mp_depth,
         dropout=train_config.mp_dropout,
