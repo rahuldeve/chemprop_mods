@@ -1,3 +1,5 @@
+from typing import Any
+
 import torch
 import torch.nn.functional as F
 from chemprop.conf import DEFAULT_ATOM_FDIM, DEFAULT_BOND_FDIM, DEFAULT_HIDDEN_DIM
@@ -40,6 +42,22 @@ class GatedFFN(torch.nn.Module):
         return gate * inp
 
 
+class Adapter(torch.nn.Module):
+    def __init__(self, dims: int) -> None:
+        super().__init__()
+        self.adapter = torch.nn.Sequential(
+            torch.nn.Linear(dims, dims // 2),
+            torch.nn.ReLU(),
+            torch.nn.Linear(dims // 2, dims)
+        )
+        # self.norm = torch.nn.LayerNorm(dims)
+        self.scale = torch.nn.Parameter(torch.ones(size=(dims, )))
+
+    def forward(self, x):
+        # x = self.norm(x)
+        return self.scale * self.adapter(x)
+
+
 class ModdedBondMessagePassing(BondMessagePassing):
     def __init__(
         self,
@@ -54,7 +72,6 @@ class ModdedBondMessagePassing(BondMessagePassing):
         d_vd: int | None = None,
         V_d_transform: ScaleTransform | None = None,
         graph_transform: GraphTransform | None = None,
-        zero_init: bool = True,
     ):
         super().__init__(
             d_v,
@@ -70,19 +87,39 @@ class ModdedBondMessagePassing(BondMessagePassing):
             graph_transform,
         )
 
-        # self.l1 = ResidualFFN(d_h, dropout=0.0)
-        # self.alpha = torch.nn.Parameter(torch.tensor(0.1))
+        self.a1 = Adapter(d_h)
+        # self.a2 = Adapter(d_h)
 
-        self.l1 = GatedFFN(d_h, dropout=0.0, bias=False)
+        self.adapters = [
+            self.W_o,
+            self.a1, 
+            # self.a2
+        ]
+
+
+    def message(self, H: Tensor, bmg: BatchMolGraph) -> Tensor:
+            index_torch = bmg.edge_index[1].unsqueeze(1).repeat(1, H.shape[1])
+            M_all = torch.zeros(len(bmg.V), H.shape[1], dtype=H.dtype, device=H.device).scatter_reduce_(
+                0, index_torch, H, reduce="sum", include_self=False
+            )[bmg.edge_index[0]]
+            M_rev = H[bmg.rev_edge_index]
+    
+            return M_all - M_rev
 
 
     def update(self, M_t, H_0, H_prev, t):  # type: ignore
         """Calcualte the updated hidden for each edge"""
-        H_t = self.W_h(M_t + self.l1(H_prev, M_t))
-        H_t = self.tau(H_t + H_0)
+
+        H_t = self.W_h(M_t)
+        H_t = H_t + self.a1(H_prev) + H_0
+
+        H_t = self.tau(H_t)
+        # H_t = self.tau(H_t + H_0)
+        # H_t = H_t + self.a1(H_prev)
         H_t = self.dropout(H_t)
-        
-        # H_t = H_t + self.l1(H_t, H_prev)
+
+        # assert self.adapter is not None
+        # H_t = H_t + self.a1(H_prev)
         return H_t
 
     def forward(self, bmg: BatchMolGraph, V_d: Tensor | None = None) -> Tensor:
@@ -124,32 +161,34 @@ class ModdedMPNN(MPNN):
         self.weight_decay = weight_decay
         self.hparams["weight_decay"] = weight_decay
 
-    def configure_optimizers(self):
-        decay, no_decay = [], []
-        for p in self.parameters():
-            if p.requires_grad:
-                (decay if p.ndim >= 2 else no_decay).append(p)
+        # self.max_lr = 5e-4
 
-        opt = optim.AdamW(
-            [
-                {"params": decay, "weight_decay": self.weight_decay},
-                {"params": no_decay, "weight_decay": 0.0},
-            ],
-            self.init_lr,
-        )
+    # def configure_optimizers(self):
+    #     decay, no_decay = [], []
+    #     for p in self.parameters():
+    #         if p.requires_grad:
+    #             (decay if p.ndim >= 2 else no_decay).append(p)
 
-        if self.trainer.train_dataloader is None:
-            # Touch `estimated_stepping_batches` so `num_training_batches` is populated;
-            # see the same workaround in `MPNN.configure_optimizers`.
-            self.trainer.estimated_stepping_batches
-        steps_per_epoch = self.trainer.num_training_batches
-        warmup_steps = self.warmup_epochs * steps_per_epoch
-        cooldown_steps = (self.trainer.max_epochs - self.warmup_epochs) * steps_per_epoch
+    #     opt = optim.AdamW(
+    #         [
+    #             {"params": decay, "weight_decay": self.weight_decay},
+    #             {"params": no_decay, "weight_decay": 0.0},
+    #         ],
+    #         self.init_lr,
+    #     )
 
-        lr_sched = build_NoamLike_LRSched(
-            opt, warmup_steps, cooldown_steps, self.init_lr, self.max_lr, self.final_lr
-        )
-        return {
-            "optimizer": opt,
-            "lr_scheduler": {"scheduler": lr_sched, "interval": "step"},
-        }
+    #     if self.trainer.train_dataloader is None:
+    #         # Touch `estimated_stepping_batches` so `num_training_batches` is populated;
+    #         # see the same workaround in `MPNN.configure_optimizers`.
+    #         self.trainer.estimated_stepping_batches
+    #     steps_per_epoch = self.trainer.num_training_batches
+    #     warmup_steps = self.warmup_epochs * steps_per_epoch
+    #     cooldown_steps = (self.trainer.max_epochs - self.warmup_epochs) * steps_per_epoch
+
+    #     lr_sched = build_NoamLike_LRSched(
+    #         opt, warmup_steps, cooldown_steps, self.init_lr, self.max_lr, self.final_lr
+    #     )
+    #     return {
+    #         "optimizer": opt,
+    #         "lr_scheduler": {"scheduler": lr_sched, "interval": "step"},
+    #     }

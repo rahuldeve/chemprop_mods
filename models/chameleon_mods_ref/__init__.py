@@ -4,6 +4,7 @@ from typing import Any
 import lightning as L
 import numpy as np
 import pandas as pd
+import torch
 from chemprop.conf import DEFAULT_ATOM_FDIM
 from chemprop.data import MoleculeDatapoint, MoleculeDataset, build_dataloader
 from chemprop.featurizers import SimpleMoleculeMolGraphFeaturizer
@@ -69,15 +70,29 @@ def prepare_mol_datasets(
 
 
 def build_model(scaler, train_config: TrainConfig):
-    d_vf, d_vd = rwse_dims(train_config.effective_rwse_k, train_config.rwse_at)
-    mp = ModdedBondMessagePassing(  # type: ignore
-        d_v=DEFAULT_ATOM_FDIM + d_vf,
-        d_h=200,
-        d_vd=d_vd or None,
-        depth=train_config.mp_depth,
-        dropout=train_config.mp_dropout,
-        zero_init=train_config.ffn_zero_init,
-    )
+    # d_vf, d_vd = rwse_dims(train_config.effective_rwse_k, train_config.rwse_at)
+    chameleon_mp = torch.load("./chemeleon_mp.pt", weights_only=True)
+
+    mp = ModdedBondMessagePassing(**chameleon_mp['hyper_parameters']) # type: ignore
+    mp.load_state_dict(chameleon_mp['state_dict'], strict=False)
+
+    for param in mp.parameters():
+            param.requires_grad = False
+
+    for module in mp.adapters:
+        for param in module.parameters():
+            param.requires_grad = True
+
+    # for param in mp.a2.parameters():
+    #         param.requires_grad = True
+
+    # mp = ModdedBondMessagePassing(  # type: ignore
+    #     d_v=DEFAULT_ATOM_FDIM + d_vf,
+    #     d_vd=d_vd or None,
+    #     depth=train_config.mp_depth,
+    #     dropout=train_config.mp_dropout,
+    #     zero_init=train_config.ffn_zero_init,
+    # )
     agg = NormAggregation()
     output_transform = UnscaleTransform.from_standard_scaler(scaler)
     # Sized from the encoder rather than left at the default 300: chemprop's
@@ -147,6 +162,7 @@ def train_and_evaluate_on_split(
             ),
             ckpt
         ],
+        # gradient_clip_val=1.0
     )
 
     trainer.fit(model, train_dataloaders=train_loader, val_dataloaders=val_loader)

@@ -57,8 +57,13 @@ def prepare_mol_datasets(
 
 
 def build_model(scaler, train_config: TrainConfig):
-    chameleon_weights = torch.load("./chemeleon_mp.pt", weights_only=True)
-    mp = BondMessagePassing(**chameleon_weights['hyper_parameters']) # type: ignore
+    chameleon_mp = torch.load("./chemeleon_mp.pt", weights_only=True)
+    mp = BondMessagePassing(**chameleon_mp['hyper_parameters']) # type: ignore
+    mp.load_state_dict(chameleon_mp['state_dict'])
+    
+    # for param in mp.parameters():
+    #     param.requires_grad = False
+
     agg = NormAggregation()
     output_transform = UnscaleTransform.from_standard_scaler(scaler)
     ffn = RegressionFFN(input_dim=mp.output_dim, n_tasks=1, output_transform=output_transform)  # type: ignore

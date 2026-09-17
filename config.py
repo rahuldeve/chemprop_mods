@@ -58,7 +58,7 @@ class TrainConfig:
     # `rwse_*` setting below -- those keep their values while it is off, which is
     # what lets a sweep flip the encoding on and off without restating them.
     # Ignored by stock chemprop, which never injects RWSE.
-    use_rwse: bool = True
+    use_rwse: bool = False
     # Number of random walk lengths encoded per atom. 0 also disables RWSE, so
     # earlier runs that switched it off that way reproduce unchanged.
     rwse_k: int = 16
