@@ -15,6 +15,7 @@ from chemprop.nn import (
     UnscaleTransform,
     metrics,
 )
+from lightning.pytorch.callbacks import ModelCheckpoint
 from lightning.pytorch.callbacks.early_stopping import EarlyStopping
 
 from config import TrainConfig
@@ -127,11 +128,11 @@ def train_and_evaluate_on_split(
     )
 
     model = build_model(scaler, train_config)
-
+    ckpt = ModelCheckpoint(monitor="val_loss", mode="min", save_top_k=1)
     trainer = L.Trainer(
         logger=False,
-        enable_checkpointing=False,
-        enable_progress_bar=False,
+        enable_checkpointing=True,
+        enable_progress_bar=True,
         accelerator="auto",
         devices=1,
         max_epochs=train_config.max_epochs,
@@ -143,9 +144,10 @@ def train_and_evaluate_on_split(
                 verbose=True,
                 patience=train_config.early_stopping_patience,
             ),
+            ckpt
         ],
     )
 
     trainer.fit(model, train_dataloaders=train_loader, val_dataloaders=val_loader)
-    results = trainer.test(model, dataloaders=test_loader, ckpt_path=None)[0]
+    results = trainer.test(model, dataloaders=test_loader, ckpt_path=ckpt.best_model_path, weights_only=False)[0]
     return results
